@@ -2,52 +2,51 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Reserva;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Models\Reserva;
 use App\Events\ReservaRealizada;
-use App\Http\Controllers\Controller;
+use App\Mail\ConfirmacionReserva;
+use Illuminate\Support\Facades\Queue;
 
 class ReservaController extends Controller
 {
     public function store(Request $request)
     {
-        // Validación de datos
-        $request->validate([
-            'habitacion_id' => 'required|exists:habitaciones,id',
-            // Otros campos de validación según sea necesario
-        ]);
-
+        $reserva = null;
         try {
-            // Iniciar una transacción de base de datos
-            DB::beginTransaction();
+            \Log::info('Inicio del método store');
 
-            // Obtener la reserva actualizada para el bloqueo optimista
-            $reserva = Reserva::findOrFail($request->input('habitacion_id'));
+            // ... Tu código de validación y creación de reserva ...
 
-            // Verificar si la versión coincide
-            if ($reserva->version !== $request->input('version')) {
-                throw new \Exception('Conflicto de concurrencia. La reserva ha sido modificada por otro usuario.');
-            }
-
-            // Actualizar la reserva (ejemplo)
-            $reserva->update([
-                // Actualiza otros campos según sea necesario
-                'estado' => 'confirmada',
-            ]);
-
-            // Despachar el evento para procesar de forma asincrónica
+            // Despacha el evento para procesar de forma asincrónica
             event(new ReservaRealizada($reserva));
 
-            // Confirmar la transacción
-            DB::commit();
+            // Enviar trabajo a la cola para enviar el correo de confirmación
+            Queue::push(function ($job) use ($reserva) {
+                try {
+                    \Log::info('Enviando correo de confirmación');
+                    Mail::to($reserva->cliente_email)->send(new ConfirmacionReserva($reserva));
+                } catch (\Exception $e) {
+                    \Log::error('Error al enviar el correo de confirmación: ' . $e->getMessage());
+                } finally {
+                    $job->delete();
+                }
+            });
 
+            \Log::info('Fin del método store');
+
+            // Devolver respuesta JSON en caso de éxito
             return response()->json(['message' => 'Reserva realizada con éxito']);
         } catch (\Exception $e) {
+            \Log::error('Error en el método store: ' . $e->getMessage());
+
             // Revertir la transacción en caso de error
             DB::rollBack();
 
-            return response()->json(['error' => $e->getMessage()], 422);
+            // Devolver respuesta JSON en caso de error
+            return response()->json(['error' => 'Error al procesar la reserva'], 422);
         }
     }
 

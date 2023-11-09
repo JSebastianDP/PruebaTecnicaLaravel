@@ -10,7 +10,7 @@ class Evento extends Model
 
     // Relación con la reserva
     public function reserva()
-    {
-        return $this->belongsTo(Reserva::class);
-    }
+{
+    return $this->belongsTo('App\Models\Reserva');
+}
 }

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('habitacion_id');
             $table->foreign('habitacion_id')->references('id')->on('habitaciones');
+            $table->string('cliente_email');
             $table->integer('version')->default(1); // Campo para el bloqueo optimista
             $table->timestamps();
         });
