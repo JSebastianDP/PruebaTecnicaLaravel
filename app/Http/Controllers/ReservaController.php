@@ -14,11 +14,28 @@ class ReservaController extends Controller
 {
     public function store(Request $request)
     {
-        $reserva = null;
         try {
             \Log::info('Inicio del método store');
 
-            // ... Tu código de validación y creación de reserva ...
+            // Validación de datos
+            $request->validate([
+                'habitacion_id' => 'required|exists:habitaciones,id',
+                'cliente_email' => 'required|email',
+                // Otros campos de validación según sea necesario
+            ]);
+
+            // Iniciar una transacción de base de datos
+            DB::beginTransaction();
+
+            // Crea la reserva
+            $reserva = Reserva::create([
+                'habitacion_id' => $request->input('habitacion_id'),
+                'cliente_email' => $request->input('cliente_email'),
+                'version' => 1,
+            ]);
+
+            // Confirmar la transacción
+            DB::commit();
 
             // Despacha el evento para procesar de forma asincrónica
             event(new ReservaRealizada($reserva));
@@ -49,5 +66,4 @@ class ReservaController extends Controller
             return response()->json(['error' => 'Error al procesar la reserva'], 422);
         }
     }
-
 }
